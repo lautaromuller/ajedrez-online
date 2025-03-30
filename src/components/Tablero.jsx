@@ -28,6 +28,7 @@ function Tablero() {
     const [capturasBlancas, setCapturasBlancas] = useState([]);
     const [capturasNegras, setCapturasNegras] = useState([]);
     const [historial, setHistorial] = useState([]);
+    const [movimientosRehechos, setMovimientosRehechos] = useState([]);
 
     const actualizarTablero = () => {
         setPosicion(convertirTablero(chess.current.board()));
@@ -54,12 +55,32 @@ function Tablero() {
     };
 
     const deshacerMovimiento = () => {
-        chess.current.undo();
-        setPosicion(convertirTablero(chess.current.board()));
-        setSeleccionado(null);
-        setHistorial(historial.slice(0, -1));
-        setMovimientosValidos([]);
+        const ultimoMovimiento = chess.current.undo();
+        if (ultimoMovimiento) {
+            if (ultimoMovimiento.captured) {
+                if (ultimoMovimiento.color == "w") {
+                    setCapturasBlancas(capturasBlancas.slice(0, -1))
+                } else {
+                    setCapturasNegras(capturasNegras.slice(0, -1))
+                }
+            }
+            setMovimientosRehechos([...movimientosRehechos, ultimoMovimiento])
+            setPosicion(convertirTablero(chess.current.board()));
+            setSeleccionado(null);
+            setHistorial(historial.slice(0, -1));
+            setMovimientosValidos([]);
+        }
     };
+
+    const rehacerMovimiento = () => {
+        if (movimientosRehechos.length > 0) {
+            const movimiento = movimientosRehechos[movimientosRehechos.length - 1]
+            chess.current.move(movimiento)
+            setHistorial([...historial, movimiento.san])
+            setMovimientosRehechos(movimientosRehechos.slice(0, -1))
+            actualizarTablero()
+        }
+    }
 
     const handleClick = (casilla) => {
         const pieza = chess.current.get(casilla);
@@ -72,7 +93,11 @@ function Tablero() {
             const posibles = chess.current.moves({ square: casilla, verbose: true }); // Movimientos posibles
             const destinos = posibles.map(m => m.to);
             setMovimientosValidos(destinos);
-        } else { // Movemos la pieza
+        } else if (seleccionado) { // Movemos la pieza
+            if (movimientosRehechos.length > 0) {
+                setMovimientosRehechos([])
+            }
+
             // Movimiento
             const move = {
                 from: seleccionado,
@@ -80,9 +105,15 @@ function Tablero() {
                 promotion: "q", // Si un peón corona
             };
 
-            const resultado = chess.current.move(move);
+            try {
 
-            if (resultado) {
+                const resultado = chess.current.move(move)
+
+                if (!resultado) {
+                    console.log("mal")
+                    return
+                }
+
                 setHistorial((prevHistorial) => [...prevHistorial, resultado.san]);
 
                 // Guardamos capturas
@@ -97,6 +128,8 @@ function Tablero() {
                 actualizarTablero();
                 setSeleccionado(null);
                 setMovimientosValidos([]);
+            } catch {
+                console.log("Movimiento no valido")
             }
         }
     };
@@ -104,13 +137,14 @@ function Tablero() {
     return (
         <>
             <button onClick={reiniciarJuego}>Reiniciar partida</button>
-            <button onClick={deshacerMovimiento}>Deshacer</button>
+            <button onClick={deshacerMovimiento} disabled={historial.length === 0}>Deshacer</button>
+            <button onClick={rehacerMovimiento} disabled={movimientosRehechos.length === 0}>Rehacer</button>
             <div className='container'>
                 <ul className='capturas-blancas'>
-                    {capturasBlancas.map((pieza, index) => <li key={index} >{obtenerSimbolo(`b${pieza}`,"pieza-capturada")}</li>)}
+                    {capturasBlancas.map((pieza, index) => <li key={index} >{obtenerSimbolo(`b${pieza}`, "pieza-capturada")}</li>)}
                 </ul>
                 <ul className='capturas-negras'>
-                    {capturasNegras.map((pieza, index) => <li key={index} >{obtenerSimbolo(`w${pieza}`,"pieza-capturada")}</li>)}
+                    {capturasNegras.map((pieza, index) => <li key={index} >{obtenerSimbolo(`w${pieza}`, "pieza-capturada")}</li>)}
                 </ul>
                 <div className="tablero">
                     {columnas.map(columna =>
@@ -126,7 +160,7 @@ function Tablero() {
                                     className={`casilla ${esNegro ? "negro" : "blanco"} ${esSeleccionado ? 'seleccionado' : ''} ${movimientosValidos.includes(casilla) ? 'resaltado' : ''}`}
                                     onClick={() => handleClick(casilla)}
                                 >
-                                    {pieza && <span className="pieza">{obtenerSimbolo(pieza,"pieza-imagen")}</span>}
+                                    {pieza && <span className="pieza">{obtenerSimbolo(pieza, "pieza-imagen")}</span>}
                                 </div>
                             );
                         })
@@ -136,9 +170,9 @@ function Tablero() {
             </div>
             <h2>Turno: {chess.current.turn() === "w" ? "Blancas" : "Negras"}</h2>
             <h3>{estadoJuego}</h3>
-            <div className='historial'>
+            <div className='historial-container'>
                 <h4>Historial de movimientos</h4>
-                <ul>{historial.join(',')}</ul>
+                <div className='historial'>{historial.map((move) => <span>{move}, </span>)}</div>
             </div>
         </>
     );
