@@ -23,12 +23,16 @@ function Tablero() {
     const chess = useRef(new Chess());
     const [seleccionado, setSeleccionado] = useState(null);
     const [posicion, setPosicion] = useState(() => convertirTablero(chess.current.board()));
-    const [movimientosValidos, setMovimientosValidos] = useState([]);
-    const [estadoJuego, setEstadoJuego] = useState("");
-    const [capturasBlancas, setCapturasBlancas] = useState([]);
-    const [capturasNegras, setCapturasNegras] = useState([]);
-    const [historial, setHistorial] = useState([]);
-    const [movimientosRehechos, setMovimientosRehechos] = useState([]);
+    const [estadoJuego, setEstadoJuego] = useState(null);
+    const capturasBlancas = useRef([]);
+    const capturasNegras = useRef([]);
+    const historial = useRef([]);
+    const movimientosRehechos = useRef([]);
+
+    const [inicioMov, setInicioMov] = useState(null)
+    const [finalMov, setFinalMov] = useState(null)
+    const [ultimosMovimientos, setUltimosMovimientos] = useState([])
+    const [mostrarHistorial, setMostrarHistorial] = useState(false)
 
     const actualizarTablero = () => {
         setPosicion(convertirTablero(chess.current.board()));
@@ -38,117 +42,129 @@ function Tablero() {
             setEstadoJuego("¡Jaque mate!");
         } else if (chess.current.isCheck()) {
             setEstadoJuego("¡Jaque!");
-        } else {
-            setEstadoJuego("");
         }
+
+        setTimeout(() => {
+            setEstadoJuego(null);
+        }, 400)
     };
 
     const reiniciarJuego = () => {
         chess.current.reset();
         setPosicion(convertirTablero(chess.current.board()));
         setSeleccionado(null);
-        setMovimientosValidos([]);
         setEstadoJuego("");
-        setCapturasBlancas([])
-        setCapturasNegras([])
-        setHistorial([])
+        capturasBlancas.current = []
+        capturasNegras.current = []
+        historial.current = []
+        movimientosRehechos.current = []
+        setUltimosMovimientos([])
     };
 
     const deshacerMovimiento = () => {
-        const ultimoMovimiento = chess.current.undo();
-        if (ultimoMovimiento) {
-            if (ultimoMovimiento.captured) {
-                if (ultimoMovimiento.color == "w") {
-                    setCapturasBlancas(capturasBlancas.slice(0, -1))
-                } else {
-                    setCapturasNegras(capturasNegras.slice(0, -1))
-                }
-            }
-            setMovimientosRehechos([...movimientosRehechos, ultimoMovimiento])
-            setPosicion(convertirTablero(chess.current.board()));
-            setSeleccionado(null);
-            setHistorial(historial.slice(0, -1));
-            setMovimientosValidos([]);
+        const ultimoMov = chess.current.undo();
+        if (!ultimoMov) return
+
+        if (ultimoMov.captured) {
+            (ultimoMov.color === "w" ? capturasBlancas : capturasNegras).current.pop()
         }
-    };
+
+        movimientosRehechos.current.push(ultimoMov)
+        setUltimosMovimientos((prev) => prev.slice(0, -1));
+
+        const nuevosMovimientos = ultimosMovimientos.slice(0, -1);
+
+        if (nuevosMovimientos.length > 0) {
+            setInicioMov(nuevosMovimientos.at(-1)[0]);
+            setFinalMov(nuevosMovimientos.at(-1)[1]);
+        } else {
+            setInicioMov(null);
+            setFinalMov(null);
+        }
+
+        historial.current.pop()
+        actualizarTablero()
+    }
 
     const rehacerMovimiento = () => {
-        if (movimientosRehechos.length > 0) {
-            const movimiento = movimientosRehechos[movimientosRehechos.length - 1]
-            chess.current.move(movimiento)
-            setHistorial([...historial, movimiento.san])
-            setMovimientosRehechos(movimientosRehechos.slice(0, -1))
-            actualizarTablero()
-        }
+        if (movimientosRehechos.current.length === 0) return
+
+        const movimiento = movimientosRehechos.current.pop();
+        const resultado = chess.current.move(movimiento);
+        if (!resultado) return;
+
+        // Establecer las casillas a marcar
+        setInicioMov(movimiento.from);
+        setFinalMov(movimiento.to);
+        setUltimosMovimientos([...ultimosMovimientos, [movimiento.from, movimiento.to]]);
+
+        // Actualizar historial
+        historial.current.push(resultado.san);
+
+        actualizarTablero();
     }
 
     const handleClick = (casilla) => {
-        const pieza = chess.current.get(casilla);
-
         if (seleccionado === casilla) { // Si la pieza está marcada la desmarcamos
             setSeleccionado(null);
-            setMovimientosValidos([]);
-        } else if (pieza && pieza.color === chess.current.turn()) { // Seleccionamos una pieza
-            setSeleccionado(casilla);
-            const posibles = chess.current.moves({ square: casilla, verbose: true }); // Movimientos posibles
-            const destinos = posibles.map(m => m.to);
-            setMovimientosValidos(destinos);
-        } else if (seleccionado) { // Movemos la pieza
-            if (movimientosRehechos.length > 0) {
-                setMovimientosRehechos([])
-            }
-
-            // Movimiento
-            const move = {
-                from: seleccionado,
-                to: casilla,
-                promotion: "q", // Si un peón corona
-            };
-
-            try {
-
-                const resultado = chess.current.move(move)
-
-                if (!resultado) {
-                    console.log("mal")
-                    return
-                }
-
-                setHistorial((prevHistorial) => [...prevHistorial, resultado.san]);
-
-                // Guardamos capturas
-                if (resultado.captured) {
-                    if (resultado.color === 'w') {
-                        setCapturasBlancas([...capturasBlancas, resultado.captured]);
-                    } else {
-                        setCapturasNegras([...capturasNegras, resultado.captured]);
-                    }
-                }
-
-                actualizarTablero();
-                setSeleccionado(null);
-                setMovimientosValidos([]);
-            } catch {
-                console.log("Movimiento no valido")
-            }
+            return
         }
-    };
+
+        const pieza = chess.current.get(casilla);
+        if (pieza && pieza.color === chess.current.turn()) { // Seleccionamos una pieza
+            setSeleccionado(casilla);
+            return
+        }
+
+        if (!seleccionado) return
+
+        if (movimientosRehechos.current.length > 0) {
+            movimientosRehechos.current = []
+        }
+
+        // Movimiento
+        const move = { from: seleccionado, to: casilla, promotion: "q" };
+
+        try {
+            const resultado = chess.current.move(move)
+
+            if (!resultado) return
+
+            setInicioMov(seleccionado)
+            setFinalMov(casilla)
+            setUltimosMovimientos([...ultimosMovimientos, [seleccionado, casilla]])
+
+            historial.current.push(resultado.san);
+
+            // Guardamos capturas
+            if (resultado.captured) {
+                (resultado.color === 'w' ? capturasBlancas : capturasNegras).current.push(resultado.captured)
+            }
+
+            actualizarTablero();
+            setSeleccionado(null);
+        } catch {
+            return
+        }
+    }
 
     return (
         <>
             <button onClick={reiniciarJuego}>Reiniciar partida</button>
-            <button onClick={deshacerMovimiento} disabled={historial.length === 0}>Deshacer</button>
-            <button onClick={rehacerMovimiento} disabled={movimientosRehechos.length === 0}>Rehacer</button>
+            <button onClick={deshacerMovimiento} disabled={historial.current.length === 0}>Deshacer</button>
+            <button onClick={rehacerMovimiento} disabled={movimientosRehechos.current.length === 0}>Rehacer</button>
             <div className='container'>
+                {estadoJuego && <h3 className='estado-juego'>{estadoJuego}</h3>}
+
                 <ul className='capturas-blancas'>
-                    {capturasBlancas.map((pieza, index) => <li key={index} >{obtenerSimbolo(`b${pieza}`, "pieza-capturada")}</li>)}
+                    {capturasBlancas.current.map((pieza, index) => (
+                        <li key={index} >{obtenerSimbolo(`b${pieza}`, "pieza-capturada")}</li>
+                    ))}
                 </ul>
-                <ul className='capturas-negras'>
-                    {capturasNegras.map((pieza, index) => <li key={index} >{obtenerSimbolo(`w${pieza}`, "pieza-capturada")}</li>)}
-                </ul>
+
                 <div className="tablero">
-                    {columnas.map(columna =>
-                        filas.map((fila) => {
+                    {columnas.slice().reverse().map(columna =>
+                        filas.slice().reverse().map((fila) => {
                             const casilla = fila + columna;
                             const pieza = posicion[casilla];
                             const esNegro = (columna + filas.indexOf(fila)) % 2 === 0;
@@ -157,7 +173,10 @@ function Tablero() {
                             return (
                                 <div
                                     key={casilla}
-                                    className={`casilla ${esNegro ? "negro" : "blanco"} ${esSeleccionado ? 'seleccionado' : ''} ${movimientosValidos.includes(casilla) ? 'resaltado' : ''}`}
+                                    className={`casilla 
+                                    ${esNegro ? "negro" : "blanco"} 
+                                    ${inicioMov === casilla || esSeleccionado ? "casilla-inicio" : ""} 
+                                    ${finalMov === casilla ? "casilla-final" : ""}`}
                                     onClick={() => handleClick(casilla)}
                                 >
                                     {pieza && <span className="pieza">{obtenerSimbolo(pieza, "pieza-imagen")}</span>}
@@ -167,13 +186,34 @@ function Tablero() {
                     )}
                 </div>
 
+                <ul className='capturas-negras'>
+                    {capturasNegras.current.map((pieza, index) => (
+                        <li key={index} >{obtenerSimbolo(`w${pieza}`, "pieza-capturada")}</li>
+                    ))}
+                </ul>
             </div>
+
             <h2>Turno: {chess.current.turn() === "w" ? "Blancas" : "Negras"}</h2>
-            <h3>{estadoJuego}</h3>
-            <div className='historial-container'>
-                <h4>Historial de movimientos</h4>
-                <div className='historial'>{historial.map((move) => <span>{move}, </span>)}</div>
-            </div>
+
+            <button onClick={() => setMostrarHistorial(!mostrarHistorial)}>
+                {mostrarHistorial ? "Ocultar" : "Mostrar"} historial de movimientos
+            </button>
+
+            {mostrarHistorial && (
+                <table className="historial">
+                    <tbody>
+                        {historial.current.map((move, i) => (
+                            i % 2 === 0 ? (
+                                <tr key={i / 2}>
+                                    <td>{Math.floor(i / 2) + 1}</td>
+                                    <td>{move}</td>
+                                    <td>{historial.current[i + 1] || ""}</td>
+                                </tr>
+                            ) : null
+                        ))}
+                    </tbody>
+                </table>
+            )}
         </>
     );
 }
@@ -187,15 +227,10 @@ function obtenerSimbolo(pieza, clase) {
 }
 
 function convertirTablero(tablero) {
-    const nuevo = {};
-    for (let i = 0; i < tablero.length; i++) {
-        for (let j = 0; j < tablero[i].length; j++) {
-            const pieza = tablero[i][j];
-            const casilla = "abcdefgh"[j] + (8 - i);
-            nuevo[casilla] = pieza ? pieza.color + pieza.type : null;
-        }
-    }
-    return nuevo;
+    return tablero.flat().reduce((acc, pieza, i) => {
+        if (pieza) acc["abcdefgh"[i % 8] + (8 - Math.floor(i / 8))] = pieza.color + pieza.type;
+        return acc;
+    }, {});
 }
 
 export default Tablero;
