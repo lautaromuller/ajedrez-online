@@ -1,12 +1,12 @@
 import './App.css'
-import Tablero from './components/Tablero'
+import Ajedrez from './components/Ajedrez'
 
 function App() {
 
   return (
     <div className='App'>
       <h1>Ajedrez online</h1>
-      <Tablero/>
+      <Ajedrez/>
     </div>
   )
 }

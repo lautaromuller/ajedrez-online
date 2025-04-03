@@ -179,3 +179,8 @@ button:disabled {
         opacity: 1;
     }
 }
+
+
+.resaltado {
+    box-shadow: inset 0 0 10px 4px rgba(173, 173, 3, 0.75);
+}

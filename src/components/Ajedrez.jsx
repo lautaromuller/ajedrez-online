@@ -1,28 +1,18 @@
 import { useState, useRef } from 'react';
 import { Chess } from 'chess.js';
-import './Tablero.css';
-import wp from '../assets/wp.png';
-import wr from '../assets/wr.png';
-import wn from '../assets/wn.png';
-import wb from '../assets/wb.png';
-import wq from '../assets/wq.png';
-import wk from '../assets/wk.png';
-import bp from '../assets/bp.png';
-import br from '../assets/br.png';
-import bn from '../assets/bn.png';
-import bb from '../assets/bb.png';
-import bq from '../assets/bq.png';
-import bk from '../assets/bk.png';
+import Casilla from './Casilla'
+import Capturas from './Capturas';
+import './Ajedrez.css';
 
 // Casillas tableros
 const filas = ["a", "b", "c", "d", "e", "f", "g", "h"];
 const columnas = [1, 2, 3, 4, 5, 6, 7, 8];
 
 
-function Tablero() {
+function Ajedrez() {
     const chess = useRef(new Chess());
     const [seleccionado, setSeleccionado] = useState(null);
-    const [posicion, setPosicion] = useState(() => convertirTablero(chess.current.board()));
+    const [posicion, setPosicion] = useState(() => ConvertirTablero(chess.current.board()));
     const [estadoJuego, setEstadoJuego] = useState(null);
     const capturasBlancas = useRef([]);
     const capturasNegras = useRef([]);
@@ -35,7 +25,7 @@ function Tablero() {
     const [mostrarHistorial, setMostrarHistorial] = useState(false)
 
     const actualizarTablero = () => {
-        setPosicion(convertirTablero(chess.current.board()));
+        setPosicion(ConvertirTablero(chess.current.board()));
 
         // Estado de juego
         if (chess.current.isCheckmate()) {
@@ -51,7 +41,7 @@ function Tablero() {
 
     const reiniciarJuego = () => {
         chess.current.reset();
-        setPosicion(convertirTablero(chess.current.board()));
+        setPosicion(ConvertirTablero(chess.current.board()));
         setSeleccionado(null);
         setEstadoJuego("");
         capturasBlancas.current = []
@@ -138,7 +128,10 @@ function Tablero() {
 
             // Guardamos capturas
             if (resultado.captured) {
-                (resultado.color === 'w' ? capturasBlancas : capturasNegras).current.push(resultado.captured)
+                (resultado.color === 'w' 
+                    ? capturasBlancas.current.push(`b${resultado.captured}`) 
+                    : capturasNegras.current.push(`w${resultado.captured}`)
+                )
             }
 
             actualizarTablero();
@@ -148,6 +141,12 @@ function Tablero() {
         }
     }
 
+    const handleDrop = (casillaDestino) => {
+        if (seleccionado) {
+            handleClick(casillaDestino);
+        }
+    };
+
     return (
         <>
             <button onClick={reiniciarJuego}>Reiniciar partida</button>
@@ -156,11 +155,7 @@ function Tablero() {
             <div className='container'>
                 {estadoJuego && <h3 className='estado-juego'>{estadoJuego}</h3>}
 
-                <ul className='capturas-blancas'>
-                    {capturasBlancas.current.map((pieza, index) => (
-                        <li key={index} >{obtenerSimbolo(`b${pieza}`, "pieza-capturada")}</li>
-                    ))}
-                </ul>
+                <Capturas capturas={capturasBlancas.current} clase="capturas-blancas"/>
 
                 <div className="tablero">
                     {columnas.slice().reverse().map(columna =>
@@ -171,32 +166,30 @@ function Tablero() {
                             const esSeleccionado = seleccionado === casilla;
 
                             return (
-                                <div
+                                <Casilla
                                     key={casilla}
-                                    className={`casilla 
-                                    ${esNegro ? "negro" : "blanco"} 
-                                    ${inicioMov === casilla || esSeleccionado ? "casilla-inicio" : ""} 
-                                    ${finalMov === casilla ? "casilla-final" : ""}`}
-                                    onClick={() => handleClick(casilla)}
-                                >
-                                    {pieza && <span className="pieza">{obtenerSimbolo(pieza, "pieza-imagen")}</span>}
-                                </div>
+                                    casilla={casilla}
+                                    pieza={pieza}
+                                    esNegro={esNegro}
+                                    esSeleccionado={esSeleccionado}
+                                    inicioMov={inicioMov}
+                                    finalMov={finalMov}
+                                    handleDrop={handleDrop}
+                                    handleClick={handleClick}
+                                />
                             );
                         })
                     )}
                 </div>
 
-                <ul className='capturas-negras'>
-                    {capturasNegras.current.map((pieza, index) => (
-                        <li key={index} >{obtenerSimbolo(`w${pieza}`, "pieza-capturada")}</li>
-                    ))}
-                </ul>
+                <Capturas capturas={capturasNegras.current} clase="capturas-negras"/>
             </div>
 
             <h2>Turno: {chess.current.turn() === "w" ? "Blancas" : "Negras"}</h2>
 
             <button onClick={() => setMostrarHistorial(!mostrarHistorial)}>
-                {mostrarHistorial ? "Ocultar" : "Mostrar"} historial de movimientos
+                {mostrarHistorial ? "Ocultar" : "Mostrar"} 
+                historial de movimientos
             </button>
 
             {mostrarHistorial && (
@@ -218,19 +211,13 @@ function Tablero() {
     );
 }
 
-function obtenerSimbolo(pieza, clase) {
-    const simbolos = {
-        wp: wp, wr: wr, wn: wn, wb: wb, wq: wq, wk: wk,
-        bp: bp, br: br, bn: bn, bb: bb, bq: bq, bk: bk,
-    };
-    return <img src={simbolos[pieza]} alt={pieza} className={clase} />;
-}
 
-function convertirTablero(tablero) {
+function ConvertirTablero(tablero) {
     return tablero.flat().reduce((acc, pieza, i) => {
         if (pieza) acc["abcdefgh"[i % 8] + (8 - Math.floor(i / 8))] = pieza.color + pieza.type;
         return acc;
     }, {});
 }
 
-export default Tablero;
+
+export default Ajedrez;
