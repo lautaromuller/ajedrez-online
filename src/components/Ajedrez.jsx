@@ -157,6 +157,14 @@ function Ajedrez() {
 
                 <Capturas capturas={capturasBlancas.current} clase="capturas-blancas"/>
 
+                <div className='filas'>{filas.map(fila => {
+                    return <div key={fila} className="fila">{fila}</div>
+                })}</div>
+
+                <div className='columnas'>{columnas.map(columna => {
+                    return <div key={columna} className="columna">{columna}</div>
+                })}</div>
+
                 <div className="tablero">
                     {columnas.slice().reverse().map(columna =>
                         filas.slice().reverse().map((fila) => {
